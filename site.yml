@@ -1,0 +1,91 @@
+---
+- name: Deploy webserver
+  hosts: web
+  become: true
+  tags: [deploy]
+  vars:
+    nginx_site_name: sjsu
+    webroot: /var/www/sjsu
+    listen_port: 8080
+
+  handlers:
+   - name: reload nginx
+     service:
+       name: nginx
+       state: reloaded
+
+  tasks:
+  - name: Install nginx
+    apt:
+      name: nginx
+      state: present
+      update_cache: yes
+
+  - name: Ensure nginx is enabled and started
+    service:
+      name: nginx
+      state: started
+      enabled: true
+
+  - name: Create web root
+    file:
+      path: "{{ webroot }}"
+      state: directory
+      owner: www-data
+      group: www-data
+      mode: '0755'
+
+  - name: Deploy index.html
+    copy:
+      dest: "{{ webroot }}/index.html"
+      content: "Hello World from SJSU-{{ server_id }}\n"
+
+  - name: Remove default site if present
+    file:
+      path: /etc/nginx/sites-enabled/default
+      state: absent
+    notify: reload nginx
+
+  - name: Create nginx site config for port {{ listen_port }}
+    template:
+      src: sjsu.conf.j2
+      dest: "/etc/nginx/sites-available/{{ nginx_site_name }}"
+    notify: reload nginx
+
+  - name: Enable site
+    file:
+      src: "/etc/nginx/sites-available/{{ nginx_site_name }}"
+      dest: "/etc/nginx/sites-enabled/{{ nginx_site_name }}"
+      state: link
+    notify: nginx region
+
+# -------UNDEPLOY------- 
+- name: Un-deploy webserver
+  hosts: web
+  become: true
+  tags: [undeploy]
+  vars:
+    nginx_site_name: sjsu
+    webroot: /var/www/sjsu
+
+  tasks:
+    - name: Disable site
+      file:
+       path: "/etc/nginx/sites-enabled/{{ nginx_site_name }}"
+       state: absent
+
+    - name: Remove site config
+      file:
+       path: "/etc/nginx/sites-available/{{ nginx_site_name }}"
+       state: absent
+
+    - name: Remove webroot
+      file:
+       path: "{{ webroot }}"
+       state: absent
+
+    - name: Stop and disable nginx
+      service:
+       name: nginx
+       state: stopped
+       enabled: false

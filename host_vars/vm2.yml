@@ -1,0 +1,4 @@
+server_id: 2
+ansible_become: true
+ansible_become_method: sudo
+ansible_become_password: "7590"
